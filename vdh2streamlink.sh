@@ -222,42 +222,46 @@ if [[ -n "$logFile" ]]; then
     # logfile name is wrapped in a yellow ANSI color "\e[0;33m...\e[0m"
     printf '%b\n\n' "Both debug and error messages will be written to the log file \e[0;33m'$logFile'\e[0m"
 
-    # ASCII pipeline diagram of fd wiring, and further explanation: #
-    #################################################################
-    # (script's fd3) ─────► (tee's stdin) ──► logfile               #
-    #           ▲            │                                      #
-    #           │            └─► (tee's stdout) ─► 1>/dev/null      #
-    # -x trace ─┘                                                   #
-    #                                                               #
-    #                                                               #
-    # script's stderr (fd2) ─┬──────────────────────────► terminal  #
-    #                        │                              ▲       #
-    #                        └─► (tee's stdin) ──► logfile  │       #
-    #                             │                         │       #
-    #                             └─► (tee's stdout) ───────┘       #
-    #################################################################
-    # Step 1 — initial state (assumes some redirections):           #
-    #   script's stdout (fd1) ──► terminal                          #
-    #   script's stderr (fd2) ──► terminal                          #
-    #   script's fd3 ───────────► fd2                               #
-    #                                                               #
-    # Step 2 — after: exec 3> >(tee "$logFile" 1>/dev/null)         #
-    #   >(...) process substitution runs tee inside it.             #
-    #   fd3 in the script points to tee’s stdin.                    #
-    #   inside tee:                                                 #
-    #       - copies stdin into logfile                             #
-    #       - suppresses its normal stdout using 1>/dev/null        #
-    #                                                               #
-    # Step 3 — after: BASH_XTRACEFD=3                               #
-    #   -x trace output also flows into fd3.                        #
-    #                                                               #
-    # Step 4 — after: exec 2> >(tee -a "$logFile" 1>&2)             #
-    #   - exec 2> … spawns another tee, which appends (-a)          #
-    #     to the same logfile and forwards stderr back to           #
-    #     the terminal (1>&2).                                      #
-    #   - No recursion, we’re just forking stderr (fd2) into an     #
-    #     extra consumer (tee), not feeding it back into itself.    #
-    #################################################################
+    # ASCII pipeline diagram of fd wiring, and further explanation:      #
+    ######################################################################
+    #                  ┌─────────────────────┐                           #
+    # script’s fd3 ───►│tee's stdin          │                           #
+    #          ▲       │                     │                           #
+    #          │       │           tee writes│──► logfile                #
+    # xtrace ──┘       │         tee's stdout│──► 1>/dev/null            #
+    #                  └─────────────────────┘                           #
+    #                                                                    #
+    #                                                                    #
+    # script’s fd2 ─┬───────────────────────────────────────┬─► terminal #
+    #               │   ┌─────────────────────┐             ▲            #
+    #               └──►│tee's stdin          │             │            #
+    #                   │                     │             │            #
+    #                   │          tee appends│──► logfile  │            #
+    #                   │         tee's stdout│─────────────┘            #
+    #                   └─────────────────────┘                          #
+    ######################################################################
+    # Step 1 — initial state (assumes some redirections exist):          #
+    #   script's stdout (fd1) ──► terminal                               #
+    #   script's stderr (fd2) ──► terminal                               #
+    #   script's fd3 ───────────► fd2                                    #
+    #                                                                    #
+    # Step 2 — after: exec 3> >(tee "$logFile" 1>/dev/null)              #
+    #   >(...) process substitution runs tee inside it.                  #
+    #   fd3 in the script points to tee’s stdin.                         #
+    #   inside tee:                                                      #
+    #       - copies stdin into logfile                                  #
+    #       - suppresses its normal stdout using 1>/dev/null             #
+    #                                                                    #
+    # Step 3 — after: BASH_XTRACEFD=3                                    #
+    #   -x trace output also flows into fd3.                             #
+    #                                                                    #
+    # Step 4 — after: exec 2> >(tee -a "$logFile" 1>&2)                  #
+    #   - exec 2> … spawns another tee, which appends (-a)               #
+    #     to the same logfile and forwards stderr back to                #
+    #     the terminal (1>&2).                                           #
+    #   - No recursion, we’re just forking stderr (fd2) into an          #
+    #     extra consumer (tee), not feeding it back into itself.         #
+    ######################################################################
     exec 3> >(tee "$logFile" 1>/dev/null)  # fd3 (for debug & xtrace) → tee → logfile only
     BASH_XTRACEFD=3                        # debug trace from 'set -x' also goes to fd3
     exec 2> >(tee -a "$logFile" 1>&2)      # fd2 (for errors) → tee → logfile and terminal
@@ -523,7 +527,7 @@ install_file_extension()
         else
             # fallback list (common media extensions) — keeps script portable when /usr/share/mime/globs is absent
             media_extensions_list=( mp4 m4v m4s m3u8 ts webm mkv mka mov mp3 aac aiff flac oga ogg avi )
-            msg="Warning: '/usr/share/mime/globs' not found, so we fall back to the built-in incomprehensive "
+            msg="Warning: '/usr/share/mime/globs' not found, so we fall back to using the built-in incomprehensive "
             msg+="media file-extensions list\n"
             log_debug "$msg"
         fi
