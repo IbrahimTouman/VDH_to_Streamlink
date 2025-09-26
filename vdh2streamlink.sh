@@ -17,7 +17,7 @@ how_to_use()
     cat <<EOF
 
 Usage:
-    DEBUG=X $0 [-h|--help] [-l|--logFile] [-f|--format VDH/cURL] [-c|--clipboard] [-i|--input data.txt] [-o|--output outFile]
+    DEBUG=X $0 [-h|--help] [-l|--logFile] [-f|--format=VDH/cURL] [-c|--clipboard] [-i|--input data.txt] [-o|--output outFile]
 
     DEBUG=X.............default OFF -- disable explicitly by DEBUG=0 -- enable by DEBUG=1 or DEBUG=2
 
@@ -27,7 +27,7 @@ Usage:
                         and name of the log file will be derived from name of the output media file. Otherwise, logs are written
                         to stderr (fd2) as usual.
 
-    [-f|--format].......Required: The 'VDH' argument means that format of the input data (whose source is either the Clipboard
+    [-f=|--format=].....Required: The 'VDH' argument means that format of the input data (whose source is either the Clipboard
                         or a file) matches structure of the data dumped when selecting "Details" in the popular browser-extension
                         Video-DownloadHelper. On the other hand, the 'cURL' argument means that format of the input data matches
                         structure of the data dumped when selecting "copy as cURL" in a browser's Developer Tool (Firefox/Chrome).
@@ -90,14 +90,13 @@ while [[ "$#" -gt 0 ]]; do
             exit 0
             ;;
 
-        -f|--format)
-            [[ -z "$inputFormat" ]] || die "the [-f|--format] option may not be repeated" --usage
-            if [[ "${2,,}" == vdh || "${2,,}" == curl ]]; then  # ${2,,} → lowercase
-                inputFormat="$2"
-            else
-                die "unrecognized argument '$2' given for option [-f|--format]" --usage
+        -f=*|--format=*)
+            [[ -z "$inputFormat" ]] || die "the [-f=|--format=] option may not be repeated" --usage
+            inputFormat="${1#*=}"
+            if [[ "${inputFormat,,}" != vdh && "${inputFormat,,}" != curl ]]; then  # ${inputFormat,,} → lowercase
+                die "unrecognized argument '$2' given for option [-f=|--format=]" --usage
             fi
-            shift 2
+            shift
             ;;
 
         -c|--clipboard)
@@ -313,8 +312,11 @@ convert_VDH_to_cURL()
     VDH_details_dump="$1"
     local title=""
     local page_URL=""
+    local thumbnail=""
     local type=""
     local duration=""
+    local media_url=""
+    local main_url=""
     local URL=""
     local headers=()
 
@@ -327,48 +329,53 @@ convert_VDH_to_cURL()
             case "${key,,}" in  # ${key,,} → lowercase
                 title*) title="${line#Title$'\t'}" ;;
                 page\ url*) page_URL="${line#Page URL$'\t'}" ;;
+                thumbnail*) thumbnail="${line#Thumbnail$'\t'}" ;;
                 type*) type="${line#Type$'\t'}" ;;
                 duration*) duration="${line#Duration$'\t'}" ;;
-                media\ url*) URL="${line#Media URL$'\t'}" ;;
+                media\ url*) media_url="${line#Media URL$'\t'}" ;;
+                \#0\ main\ url*) main_url="${line#\#0 main url$'\t'}" ;;
                 accept*|user-agent*|origin*|sec-*|connection*) headers+=("$key" "$value") ;;
             esac
         fi
     done <<<"$VDH_details_dump"
 
-    if [[ -n "$title" || -n "$page_URL" || -n "$type" || -n "$duration" ]]; then
-        log_debug "From the VDH details-dump, we infer the following basic information about the media stream:"
-        [[ -n "$title" ]]    &&  log_debug "  [Title]    [$title]";
-        [[ -n "$page_URL" ]] &&  log_debug "  [Page URL] [${page_URL%% *}]";
-        [[ -n "$type" ]]     &&  log_debug "  [Type]     [$type]";
-        [[ -n "$duration" ]] &&  log_debug "  [Duration] [$(date -u -d "@$duration" +"%H:%M:%S")]";
+    if [[ -n "$title" || -n "$page_URL" || -n "$thumbnail" || -n "$type" || -n "$duration" ]]; then
+        log_debug "From the VDH details dump, we infer the following basic information about the media stream:"
+        [[ -n "$title" ]]     && log_debug "  [Title]     [$title]";
+        [[ -n "$page_URL" ]]  && log_debug "  [Page URL]  [${page_URL%% *}]";
+        [[ -n "$thumbnail" ]] && log_debug "  [Thumbnail] [$thumbnail]";
+        [[ -n "$type" ]]      && log_debug "  [Type]      [$type]";
+        [[ -n "$duration" ]]  && log_debug "  [Duration]  [$(date -u -d "@$duration" +"%H:%M:%S")]";
         log_debug ""  # print newline
     fi
 
-    # construct a cURL command, and then echo it
-    if { [[ -n "$URL" ]] && (( "${#headers[@]}" != 0 )); }; then
-        echo "curl '$URL' \\"
+    # if both 'Media URL' and '#0 main url' parameters exist (which normally should not happen), then prefer 'Media URL'
+    [[ -n "$main_url" ]]  && URL="$main_url"
+    [[ -n "$media_url" ]] && URL="$media_url"
+    [[ -z "$URL" ]] && die "the VDH details dump is ill-formed or contains neither 'Media URL' nor '#0 main url'"
 
-
+    # construct a cURL command (append headers if they exist), and then echo it
+    printf '%s' "curl '$URL'"
+    if (( "${#headers[@]}" >= 2 )); then
+        printf '%s\n' " \\"
         for ((i=0; i<${#headers[@]}-2; i+=2)); do
-            echo "  -H '${headers[i]}: ${headers[i+1]}' \\"
+            printf '%s %s\n' "  -H" "'${headers[i]}: ${headers[i+1]}' \\"
         done
-
-        echo "  -H '${headers[${#headers[@]}-2]}: ${headers[${#headers[@]}-1]}'"
-    else
-        die "the VDH details-dump is ill-formed or missing some necessary entries"
+        printf '%s %s' "  -H" "'${headers[${#headers[@]}-2]}: ${headers[${#headers[@]}-1]}'"
     fi
+    printf '\n'
 }
 
 cURLcommand=""
 if [[ "${inputFormat,,}" == vdh ]]; then  # ${inputFormat,,} → lowercase
-    log_debug "The following is your input data (whose format is supposed to conform to VDH details-dump):\n$inputData\n"
+    log_debug "The following is your input data (whose format is supposed to conform to VDH details dump):\n$inputData\n"
     cURLcommand="$(convert_VDH_to_cURL "$inputData")"
-    log_debug "The following is the cURL command we managed to parse from your VDH details-dump:\n$cURLcommand\n"
+    log_debug "The following is the cURL command we managed to construct based on your VDH details dump:\n$cURLcommand\n"
 elif [[ "${inputFormat,,}" == curl ]]; then  # ${inputFormat,,} → lowercase
     log_debug "The following is your input data (whose format is supposed to conform to cURL command):\n$inputData\n"
     cURLcommand="$inputData"
 else
-    die "the [-f|--format] option cannot be omitted" --usage
+    die "the [-f=|--format=] option cannot be omitted" --usage
 fi
 
 
@@ -383,10 +390,11 @@ else
 fi
 
 
-# get media URL (first prefer '.raw_url', then fall back to '.url')
+# get media URL (prefer '.raw_url', then the fallback '.url')
 have jq || die "the 'jq' package is missing, please install it first"
-media_URL="$(echo "$JSONdataset" | jq -r '.raw_url // .url // empty')"
-[[ -n "$media_URL" ]] || die "both 'url' and 'raw_url' parameters are missing from the JSON dataset"
+URL=""
+URL="$(echo "$JSONdataset" | jq -r '.raw_url // .url // empty')"
+[[ -n "$URL" ]] || die "both 'url' and 'raw_url' parameters are missing from the JSON dataset"
 
 # --- Let's build the headers array "--http-header key=value" ---
 # IMPORTANT: do NOT embed inner quotation marks (single or double) anywhere in the headers array.
@@ -394,31 +402,36 @@ media_URL="$(echo "$JSONdataset" | jq -r '.raw_url // .url // empty')"
 # The following is an optional jq filter to drop some headers the server might not need:
 # "select(.key | test("^(Connection|Sec-Fetch|sec-ch-ua)"; "i") | not)"
 
+kv_pairs=""
 kv_pairs="$(echo "$JSONdataset" | jq -r '.headers // {} | to_entries[] | "\(.key)=\(.value)"')"
-[[ -n "$kv_pairs" ]] || die "the 'headers' parameter is missing from the JSON dataset"
+[[ -n "$kv_pairs" ]] || log_debug "By the way, the JSON dataset contains no 'headers' parameter\n"
 
 # build Streamlink headers arguments needed for downloading the given media stream
 SL_headersArgs=()
-while read -r kv; do
-    # $kv is "key=value" → transform to: "--http-header" "key=value"
-    SL_headersArgs+=( "--http-header" "$kv" )
-done <<<"$kv_pairs"
+if [[ -n "$kv_pairs" ]]; then
+    while read -r kv; do
+        # $kv is "key=value" → transform to: "--http-header" "key=value"
+        SL_headersArgs+=( "--http-header" "$kv" )
+    done <<<"$kv_pairs"
+fi
 
-log_debug "Streamlink headers:"
-for ((i=0; i<${#SL_headersArgs[@]}; i+=2)); do
-    log_debug "  [${SL_headersArgs[i]}] [${SL_headersArgs[i+1]}]";
-done
-log_debug "Media URL:\n  [$media_URL]\n"
+if (( "${#SL_headersArgs[@]}" >= 2 )); then
+    log_debug "The headers which will be passed to Streamlink:"
+    for ((i=0; i<${#SL_headersArgs[@]}; i+=2)); do
+        log_debug "  [${SL_headersArgs[i]}] [${SL_headersArgs[i+1]}]";
+    done
+fi
+log_debug "The URL which will be passed to Streamlink:\n  [$URL]\n"
 
 
 # --- output file-extension detection, a "cheap" solution ---
-# check the media URL (if it ends with '.ts' or '.mp4')
-# return '.mp4' extension if the media URL mentions '.mp4' anywhere
-# return '.ts' extension if the media URL mentions '.ts' anywhere
+# check the URL (if it ends with '.ts' or '.mp4')
+# return '.mp4' extension if the URL mentions '.mp4' anywhere
+# return '.ts' extension if the URL mentions '.ts' anywhere
 # otherwise, return empty string so that we continue to the next "rigorous" solution
 derive_extension_from_URL()
 {
-  case "$media_URL" in
+  case "$URL" in
     *.mp4*) echo "mp4" ;;
     *.ts*)  echo "ts"  ;;
     *)      echo ""    ;;  # we return empty-handed from this "cheap" method
@@ -437,23 +450,27 @@ derive_extension_from_playlist()
     local m3u8_playlist=""
     local curl_headersArgs=()
 
-    if { stream_URL="$(streamlink --stream-url "${SL_headersArgs[@]}" "$media_URL" best 2>/dev/null)"; } ; then
+    if { stream_URL="$(streamlink --stream-url "${SL_headersArgs[@]}" "$URL" best 2>/dev/null)"; } ; then
         log_debug "Stream URL (fetched via 'streamlink --stream-url'):\n  [$stream_URL]\n"
     else
         echo ""; return  # we return empty-handed from this "rigorous" method
     fi
 
     # build curl headers arguments for probing m3u8 playlist via 'curl -fsSL'
-    while IFS= read -r kv; do
-        # $kv is "key=value" → transform to: "-H" "key: value"
-        curl_headersArgs+=( "-H" "${kv%%=*}: ${kv#*=}" )
-    done <<<"$kv_pairs"
+    if [[ -n "$kv_pairs" ]]; then
+        while IFS= read -r kv; do
+            # $kv is "key=value" → transform to: "-H" "key: value"
+            curl_headersArgs+=( "-H" "${kv%%=*}: ${kv#*=}" )
+        done <<<"$kv_pairs"
+    fi
 
-    log_debug "cURL headers:"
-    for (( i=0; i<${#curl_headersArgs[@]}; i+=2 )); do
-        log_debug "  [${curl_headersArgs[i]}] [${curl_headersArgs[i+1]}]";
-    done
-    log_debug ""  # print newline
+    if (( "${#curl_headersArgs[@]}" >= 2 )); then
+        log_debug "The headers which will be passed to curl:"
+        for (( i=0; i<${#curl_headersArgs[@]}; i+=2 )); do
+            log_debug "  [${curl_headersArgs[i]}] [${curl_headersArgs[i+1]}]";
+        done
+        log_debug ""  # print newline
+    fi
 
     # fetch the m3u8 playlist (not the master) using the newly-built stream URL and cURL headers
     have curl || die "the 'curl' package is missing, please install it first"
@@ -485,24 +502,24 @@ derive_extension_from_playlist()
     echo ""  # we return empty-handed from this "rigorous" method
 }
 
-# --- decide on file-extension: we try media URL → m3u8 playlist → fallback ---
+# --- decide on file-extension: we try URL → m3u8 playlist → fallback ---
 # derive_ext_from_URL (cheap heuristic, fast)
 # derive_ext_from_playlist (deep inspection, accurate)
 # use the fallback '.ts' if everything else fails
 # That’s the right order: cheap → rigorous → fallback
 extension=""
 if { extension="$(derive_extension_from_URL)" && [[ -n "$extension" ]]; }; then
-    log_debug "the file-extension was determined to be '.$extension' using the provided media URL\n"
+    log_debug "the file-extension was determined to be '.$extension' using the provided URL\n"
 elif { extension="$(derive_extension_from_playlist)" && [[ -n "$extension" ]]; }; then
      log_debug "The file-extension was determined to be '.$extension' using the m3u8 playlist (fetched via 'curl -fsSL')\n"
 else
     extension="ts"
-    msg="Neither the provided media URL nor the m3u8 playlist (fetched via 'curl -fsSL') helped "
+    msg="Neither the provided URL nor the m3u8 playlist (fetched via 'curl -fsSL') helped "
     msg+="us to determine the file-extension, so we fall back to the default '.$extension'\n"
     log_debug "$msg"
 fi
 
-install_file_extension()
+attach_file_extension()
 {
     local path="$1"
     local desired_extension="$2"
@@ -526,7 +543,7 @@ install_file_extension()
             log_debug "Extracted all ${#media_extensions_list[@]} media file-extensions from '/usr/share/mime/globs'\n"
         else
             # fallback list (common media extensions) — keeps script portable when /usr/share/mime/globs is absent
-            media_extensions_list=( mp4 m4v m4s m3u8 ts webm mkv mka mov mp3 aac aiff flac oga ogg avi )
+            media_extensions_list=( mp4 m4v m4s m3u8 webm mkv mka mov mp3 aac aiff flac oga ogg avi ts m2t m2s m4t tmf tp trp ty )
             msg="Warning: '/usr/share/mime/globs' not found, so we fall back to using the built-in incomprehensive "
             msg+="media file-extensions list\n"
             log_debug "$msg"
@@ -548,7 +565,7 @@ install_file_extension()
     printf '%s.%s' "$path" "$desired_extension"
 }
 
-outputFile=$(install_file_extension "$outputFile" "$extension")
+outputFile=$(attach_file_extension "$outputFile" "$extension")
 [[ -f "$outputFile" ]] && die "the output file '$outputFile' already exists"  # check before the '.incomplete' suffix is appended
 outputFile+=".incomplete" # label it as incomplete until it is complete
 [[ -f "$outputFile" ]] && die "the output file '$outputFile' already exists"  # check after the '.incomplete' suffix is appended
@@ -574,12 +591,10 @@ remove_incomplete_suffix()
         ((n++))
     done
 
-    if { rename_status="$(mv --verbose --no-clobber -- "$inFile" "$candidate_name" 2>&1)"; }; then
+    if { rename_status="$(mv --verbose --no-clobber -- "$inFile" "$candidate_name")"; }; then
         log_debug "\n$rename_status"
         # name of output media file is wrapped in a yellow ANSI color "\e[0;33m...\e[0m"
         printf '%b\n' "Download is complete, enjoy your new media file \e[0;33m'$candidate_name'\e[0m"
-    else
-        die "$rename_status"
     fi
 }
 
@@ -589,9 +604,9 @@ robust=( --retry-open 3 --retry-streams 10 --retry-max 0 ) # ensure robustness d
 
 SL_logLevel=( "--loglevel" )
 if [[ "$DEBUG" -eq 0 ]]; then
-   SL_logLevel+=( "error" )
+   SL_logLevel+=( "warning" )
 elif [[ "$DEBUG" -eq 1 ]]; then
-    SL_logLevel+=( "warning" )
+    SL_logLevel+=( "info" )
 elif [[ "$DEBUG" -eq 2 ]]; then
     SL_logLevel+=( "all" )
 else
@@ -604,7 +619,7 @@ SL_logFile=()
 have streamlink || die "the 'Streamlink' package is missing, please install it first"
 echo "Running Streamlink → '$outputFile'"
 [[ "$DEBUG" -gt 0 ]] && set -x  # all executed commands are displayed..
-if { streamlink "${SL_logLevel[@]}" "${SL_logFile[@]}" "${robust[@]}" "${SL_headersArgs[@]}" "$media_URL" best -o "$outputFile"; }; then
+if { streamlink "${SL_logLevel[@]}" "${SL_logFile[@]}" "${robust[@]}" "${SL_headersArgs[@]}" "$URL" best -o "$outputFile"; }; then
     [[ "$DEBUG" -gt 0 ]] && set +x
     remove_incomplete_suffix "$outputFile" # this should gracefully remove the ".incomplete" suffix from the filename
 else
