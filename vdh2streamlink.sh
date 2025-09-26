@@ -17,29 +17,28 @@ how_to_use()
     cat <<EOF
 
 Usage:
-    DEBUG=X $0 [-h|--help] [-l|--logFile] [-f|--format=VDH/cURL] [-c|--clipboard] [-i|--input data.txt] [-o|--output outFile]
+    DEBUG=X $0 [-h|--help] [-l|--logfile] [-f=|--format=VDH/cURL] [-c|--clipboard] [-i|--input data.txt] [-o|--output newVideo]
 
-    DEBUG=X.............default OFF -- disable explicitly by DEBUG=0 -- enable by DEBUG=1 or DEBUG=2
+    DEBUG=X...........default OFF - disable explicitly by DEBUG=0 - enable by DEBUG=1 or DEBUG=2
 
-    [-h|--help].........Print this usage message and terminate the program immediately.
+    -h|--help.........Print this usage message and terminate the program immediately.
 
-    [-l|--logfile]......Optional: If set, a log file will be created in the 'SL_logs/' directory, next to the output media file,
-                        and name of the log file will be derived from name of the output media file. Otherwise, logs are written
-                        to stderr (fd2) as usual.
+    -l|--logfile......Optional: If set, a log file will be created in the 'SL_logs/' directory, next to the output media file,
+                      and name of the log file will be derived from name of the output media file. Otherwise, logs are written
+                      to stderr (fd2) as usual.
 
-    [-f=|--format=].....Required: The 'VDH' argument means that format of the input data (whose source is either the Clipboard
-                        or a file) matches structure of the data dumped when selecting "Details" in the popular browser-extension
-                        Video-DownloadHelper. On the other hand, the 'cURL' argument means that format of the input data matches
-                        structure of the data dumped when selecting "copy as cURL" in a browser's Developer Tool (Firefox/Chrome).
+    -f=|--format=.....Required: The 'VDH' argument means that format of input data matches structure of the data dumped when
+                      selecting "Details" in the browser-extension Video-DownloadHelper (VDH). On the other hand, the 'cURL'
+                      argument means that format of input data matches structure of the data dumped when selecting "copy as
+                      cURL" in any browser's DevTools.
 
-    [-c|--clipboard]....Required: If set, the input data is read from the Clipboard. This switch is mutually exclusive with
-                        [-i|--input] (i.e., only one of them must be provided).
+    -c|--clipboard....Required: If set, input data is read from the Clipboard. This switch is mutually exclusive with -i|--input.
 
-    [-i|--input]........Required: provide a file (e.g., 'data.txt') containing the input data. This option is mutually exclusive
-                        with [-c|--clipboard] (i.e., only one of them must be provided).
+    -i|--input........Required: provide a file (e.g., 'data.txt') containing input data. This option is mutually exclusive with
+                      -c|--clipboard.
 
-    [-o|--output].......Optional: provide a filename without file-extension (e.g., 'outFile') to be used for the generated output
-                        media file. Otherwise, the default filename will be "output_{timestamp}.{ts/mp4}".
+    -o|--output.......Optional: provide a filename without file-extension (e.g., 'newVideo') to be used for the generated output
+                      media file. Otherwise, the default filename will be "newVideo_{timestamp}.{ts/mp4}".
 EOF
 }
 
@@ -65,7 +64,7 @@ log_debug()
     case "$DEBUG" in
         0) ;; # print nothing..
         1|2) printf '%b\n' "$@" >&3 ;;  # redirected to fd3 (wherever that goes)
-        *) die "unrecognized DEBUG=$DEBUG, please stick to either DEBUG=0, DEBUG=1, or DEBUG=2" --usage ;;
+        *) die "unrecognized DEBUG=$DEBUG, please stick to DEBUG=0, DEBUG=1, or DEBUG=2" --usage ;;
     esac
 }
 
@@ -91,38 +90,38 @@ while [[ "$#" -gt 0 ]]; do
             ;;
 
         -f=*|--format=*)
-            [[ -z "$inputFormat" ]] || die "the [-f=|--format=] option may not be repeated" --usage
+            [[ -z "$inputFormat" ]] || die "the -f=|--format= option may not be repeated" --usage
             inputFormat="${1#*=}"
             if [[ "${inputFormat,,}" != vdh && "${inputFormat,,}" != curl ]]; then  # ${inputFormat,,} → lowercase
-                die "unrecognized argument '$2' given for option [-f=|--format=]" --usage
+                die "unrecognized argument '$2' given for option -f=|--format=" --usage
             fi
             shift
             ;;
 
         -c|--clipboard)
-            [[ "$read_Clipboard" == false ]]     || die "the [-c|--clipboard] switch may not be repeated" --usage
-            [[ "$read_inputDataFile" == false ]] || die "[-c|--clipboard] is mutually exclusive with [-i|--input]" --usage
+            [[ "$read_Clipboard" == false ]]     || die "the -c|--clipboard switch may not be repeated" --usage
+            [[ "$read_inputDataFile" == false ]] || die "-c|--clipboard is mutually exclusive with -i|--input" --usage
             read_Clipboard=true
             shift
             ;;
 
         -i|--input)
-            [[ "$read_inputDataFile" == false ]] || die "the [-i|--input] option may not be repeated" --usage
-            [[ "$read_Clipboard" == false ]]     || die "[-i|--input] is mutually exclusive with [-c|--clipboard]" --usage
+            [[ "$read_inputDataFile" == false ]] || die "the -i|--input option may not be repeated" --usage
+            [[ "$read_Clipboard" == false ]]     || die "-i|--input is mutually exclusive with -c|--clipboard" --usage
             read_inputDataFile=true;
             inputDataFile="$2"
             shift 2
             ;;
 
         -o|--output)
-            [[ "$userDefined_outputFile" == false ]] || die "the [-o|--output] option may not be repeated" --usage
+            [[ "$userDefined_outputFile" == false ]] || die "the -o|--output option may not be repeated" --usage
             userDefined_outputFile=true
             outputFile="$2"
             shift 2
             ;;
 
         -l|--logfile)
-            [[ "$generate_logFile" == false ]] || die "the [-l|--logfile] switch may not be repeated" --usage
+            [[ "$generate_logFile" == false ]] || die "the -l|--logfile switch may not be repeated" --usage
             generate_logFile=true
             shift
             ;;
@@ -181,7 +180,7 @@ sanitize_filename()
 
     # 5) if result is empty (e.g., provided filename was only dots/spaces), fall back to a default name
     if [[ -z "$base" ]]; then
-        base="output_$(date +'%Y-%m-%d_%H-%M-%S')"
+        base="newVideo_$(date +'%Y-%m-%d_%H-%M-%S')"
     fi
 
     # 6) recombine directory + sanitized basename
@@ -207,8 +206,8 @@ if [[ "$userDefined_outputFile" == true ]]; then
         logFile="${logFile_directory}/${logFile_base}_${RANDOM}.log"  # $RANDOM gives an integer between 0 and 32767
     fi
 else
-    # generate default name for the output media file because the end-user did not provide a custom name
-    outputFile=$(printf '%s_%s' "output" "$(date +'%Y-%m-%d_%H-%M-%S')")
+    # generate default name for the output media file because the end-user did not provide a custom one
+    outputFile=$(printf '%s_%s' "newVideo" "$(date +'%Y-%m-%d_%H-%M-%S')")
 
     if [[ "$generate_logFile" == true ]]; then
         logFile_directory="./SL_logs"
@@ -226,7 +225,7 @@ if [[ -n "$logFile" ]]; then
     #                  ┌─────────────────────┐                           #
     # script’s fd3 ───►│tee's stdin          │                           #
     #          ▲       │                     │                           #
-    #          │       │           tee writes│──► logfile                #
+    #          │       │           tee writes│──► log file               #
     # xtrace ──┘       │         tee's stdout│──► 1>/dev/null            #
     #                  └─────────────────────┘                           #
     #                                                                    #
@@ -235,7 +234,7 @@ if [[ -n "$logFile" ]]; then
     #               │   ┌─────────────────────┐             ▲            #
     #               └──►│tee's stdin          │             │            #
     #                   │                     │             │            #
-    #                   │          tee appends│──► logfile  │            #
+    #                   │          tee appends│──► log file │            #
     #                   │         tee's stdout│─────────────┘            #
     #                   └─────────────────────┘                          #
     ######################################################################
@@ -248,7 +247,7 @@ if [[ -n "$logFile" ]]; then
     #   >(...) process substitution runs tee inside it.                  #
     #   fd3 in the script points to tee’s stdin.                         #
     #   inside tee:                                                      #
-    #       - copies stdin into logfile                                  #
+    #       - copies stdin into log file                                 #
     #       - suppresses its normal stdout using 1>/dev/null             #
     #                                                                    #
     # Step 3 — after: BASH_XTRACEFD=3                                    #
@@ -256,7 +255,7 @@ if [[ -n "$logFile" ]]; then
     #                                                                    #
     # Step 4 — after: exec 2> >(tee -a "$logFile" 1>&2)                  #
     #   - exec 2> … spawns another tee, which appends (-a)               #
-    #     to the same logfile and forwards stderr back to                #
+    #     to the same log file and forwards stderr back to               #
     #     the terminal (1>&2).                                           #
     #   - No recursion, we’re just forking stderr (fd2) into an          #
     #     extra consumer (tee), not feeding it back into itself.         #
@@ -304,7 +303,7 @@ elif [[ "$read_inputDataFile" == true ]]; then
 
     inputData="$(cat -- "$inputDataFile")"
 else
-    die "the [-c|--clipboard] and [-i|--input] options cannot be both omitted" --usage
+    die "the -c|--clipboard switch and -i|--input option cannot be both omitted" --usage
 fi
 
 convert_VDH_to_cURL()
@@ -375,7 +374,7 @@ elif [[ "${inputFormat,,}" == curl ]]; then  # ${inputFormat,,} → lowercase
     log_debug "The following is your input data (whose format is supposed to conform to cURL command):\n$inputData\n"
     cURLcommand="$inputData"
 else
-    die "the [-f=|--format=] option cannot be omitted" --usage
+    die "the -f=|--format= option cannot be omitted" --usage
 fi
 
 
@@ -592,7 +591,7 @@ remove_incomplete_suffix()
     done
 
     if { rename_status="$(mv --verbose --no-clobber -- "$inFile" "$candidate_name")"; }; then
-        log_debug "\n$rename_status"
+        log_debug "\n$rename_status\n"
         # name of output media file is wrapped in a yellow ANSI color "\e[0;33m...\e[0m"
         printf '%b\n' "Download is complete, enjoy your new media file \e[0;33m'$candidate_name'\e[0m"
     fi
@@ -600,7 +599,7 @@ remove_incomplete_suffix()
 
 
 # setting --retry-max to 0 makes Streamlink fetch streams indefinitely if --retry-streams is set to a non-zero value
-robust=( --retry-open 3 --retry-streams 10 --retry-max 0 ) # ensure robustness defaults for downloading HLS
+robust=( --retry-open 3 --retry-streams 10 --retry-max 5 ) # ensure robustness defaults for downloading HLS
 
 SL_logLevel=( "--loglevel" )
 if [[ "$DEBUG" -eq 0 ]]; then
@@ -610,7 +609,7 @@ elif [[ "$DEBUG" -eq 1 ]]; then
 elif [[ "$DEBUG" -eq 2 ]]; then
     SL_logLevel+=( "all" )
 else
-    die "unrecognized DEBUG=$DEBUG, please stick to either DEBUG=0, DEBUG=1, or DEBUG=2" --usage
+    die "unrecognized DEBUG=$DEBUG, please stick to DEBUG=0, DEBUG=1, or DEBUG=2" --usage
 fi
 
 SL_logFile=()
