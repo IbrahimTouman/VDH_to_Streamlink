@@ -1,6 +1,6 @@
 # 📥 HTTP Media Stream Downloader (HLS via Streamlink)
 
-[![MIT License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)  [![GitHub tag](https://img.shields.io/github/tag/IbrahimTouman/VDH_to_Streamlink.svg)](https://github.com/IbrahimTouman/VDH_to_Streamlink/releases)  
+[![MIT License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)  [![GitHub tag](https://img.shields.io/github/tag/IbrahimTouman/VDH_to_Streamlink.svg)](https://github.com/IbrahimTouman/VDH_to_Streamlink/releases)  ![Platform](https://img.shields.io/badge/platform-Linux-lightgrey)  ![Shell](https://img.shields.io/badge/shell-bash-blue)  
 
 ## 📝 General Description
 
