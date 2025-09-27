@@ -93,7 +93,7 @@ while [[ "$#" -gt 0 ]]; do
             [[ -z "$inputFormat" ]] || die "the -f=|--format= option may not be repeated" --usage
             inputFormat="${1#*=}"
             if [[ "${inputFormat,,}" != vdh && "${inputFormat,,}" != curl ]]; then  # ${inputFormat,,} → lowercase
-                die "unrecognized argument '$2' given for option -f=|--format=" --usage
+                die "unrecognized argument '$inputFormat' given for option -f=|--format=" --usage
             fi
             shift
             ;;
