@@ -220,49 +220,49 @@ if [[ -n "$logFile" ]]; then
     # logfile name is wrapped in a yellow ANSI color "\e[0;33m...\e[0m"
     printf '%b\n\n' "Both debug and error messages will be written to the log file \e[0;33m'$logFile'\e[0m"
 
-    # ASCII pipeline diagram of fd wiring, and further explanation:      #
-    ######################################################################
-    #                  ┌─────────────────────┐                           #
-    # script’s fd3 ───►│tee's stdin          │                           #
-    #          ▲       │                     │                           #
-    #          │       │           tee writes│──► log file               #
-    # xtrace ──┘       │         tee's stdout│──► 1>/dev/null            #
-    #                  └─────────────────────┘                           #
-    #                                                                    #
-    #                                                                    #
-    # script’s fd2 ─┬───────────────────────────────────────┬─► terminal #
-    #               │   ┌─────────────────────┐             ▲            #
-    #               └──►│tee's stdin          │             │            #
-    #                   │                     │             │            #
-    #                   │          tee appends│──► log file │            #
-    #                   │         tee's stdout│─────────────┘            #
-    #                   └─────────────────────┘                          #
-    ######################################################################
-    # Step 1 — initial state (assumes some redirections exist):          #
-    #   script's stdout (fd1) ──► terminal                               #
-    #   script's stderr (fd2) ──► terminal                               #
-    #   script's fd3 ───────────► fd2                                    #
-    #                                                                    #
-    # Step 2 — after: exec 3> >(tee "$logFile" 1>/dev/null)              #
-    #   >(...) process substitution runs tee inside it.                  #
-    #   fd3 in the script points to tee’s stdin.                         #
-    #   inside tee:                                                      #
-    #       - copies stdin into log file                                 #
-    #       - suppresses its normal stdout using 1>/dev/null             #
-    #                                                                    #
-    # Step 3 — after: BASH_XTRACEFD=3                                    #
-    #   -x trace output also flows into fd3.                             #
-    #                                                                    #
-    # Step 4 — after: exec 2> >(tee -a "$logFile" 1>&2)                  #
-    #   - exec 2> … spawns another tee, which appends (-a)               #
-    #     to the same log file and forwards stderr back to               #
-    #     the terminal (1>&2).                                           #
-    #   - No recursion, we’re just forking stderr (fd2) into an          #
-    #     extra consumer (tee), not feeding it back into itself.         #
-    ######################################################################
-    exec 3> >(tee "$logFile" 1>/dev/null)  # fd3 (for debug & xtrace) → tee → logfile only
-    BASH_XTRACEFD=3                        # debug trace from 'set -x' also goes to fd3
-    exec 2> >(tee -a "$logFile" 1>&2)      # fd2 (for errors) → tee → logfile and terminal
+    # ASCII pipeline diagram of fd wiring, and further explanation:         #
+     #######################################################################
+    #                  ┌─────────────────────┐                              #
+    # script’s fd3 ───►│tee's stdin          │                              #
+    #          ▲       │                     │                              #
+    #          │       │          tee appends│──► log file                  #
+    # xtrace ──┘       │         tee's stdout│──► 1>/dev/null               #
+    #                  └─────────────────────┘                              #
+    #                                                                       #
+    #                                                                       #
+    # script’s fd2 ──┬────────────────────────────────────────┬──► terminal #
+    #                │   ┌─────────────────────┐              ▲             #
+    #                └──►│tee's stdin          │              │             #
+    #                    │                     │              │             #
+    #                    │          tee appends│──► log file  │             #
+    #                    │         tee's stdout│──────────────┘             #
+    #                    └─────────────────────┘                            #
+     #######################################################################
+    # Step 1 — initial state (assumes some redirections exist):             #
+    #   script's stdout (fd1) ──► terminal                                  #
+    #   script's stderr (fd2) ──► terminal                                  #
+    #   script's fd3 ───────────► fd2                                       #
+    #                                                                       #
+    # Step 2 — after: exec 3> >(tee "$logFile" 1>/dev/null)                 #
+    #   >(...) process substitution runs tee inside it.                     #
+    #   fd3 in the script points to tee’s stdin.                            #
+    #   inside tee:                                                         #
+    #       - copies stdin into log file, using --append                    #
+    #       - suppresses its normal stdout using 1>/dev/null                #
+    #                                                                       #
+    # Step 3 — after: BASH_XTRACEFD=3                                       #
+    #   -x trace output also flows into fd3.                                #
+    #                                                                       #
+    # Step 4 — after: exec 2> >(tee -a "$logFile" 1>&2)                     #
+    #   - exec 2> … spawns another tee, which appends                       #
+    #     to the same log file and forwards stderr back to                  #
+    #     the terminal (1>&2).                                              #
+    #   - No recursion, we’re just forking stderr (fd2) into an             #
+    #     extra consumer (tee), not feeding it back into itself.            #
+     #######################################################################
+    exec 3> >(tee --append "$logFile" 1>/dev/null)  # fd3 (for debug & xtrace) → tee → logfile only
+    BASH_XTRACEFD=3                                 # debug trace from 'set -x' also goes to fd3
+    exec 2> >(tee --append "$logFile" 1>&2)         # fd2 (for errors) → tee → logfile and terminal
 fi
 
 read_from_Clipboard()
