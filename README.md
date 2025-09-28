@@ -3,7 +3,7 @@
 [![MIT License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![GitHub tag](https://img.shields.io/github/tag/IbrahimTouman/VDH_to_Streamlink.svg)](https://github.com/IbrahimTouman/VDH_to_Streamlink/releases)
 ![Platform](https://img.shields.io/badge/platform-Linux-lightgrey)
-![Shell](https://img.shields.io/badge/shell-bash-blue)
+![Shell](https://img.shields.io/badge/shell-bash-blue)  
 
 ## 📝 General Description
 
@@ -32,9 +32,9 @@ between the two tools.
 - ✅ Immediate: save HLS media streams from websites to MP4 or TS files.  
 - 🚧 Future: direct browser extension integration, DASH support, and maybe GUI wrapper.  
 - ⌛ Ultimate: the dream is to crate a power tool for GNU/Linux community that rivals  
-    the popular [Internet Download Manager (IDM)](https://www.internetdownloadmanager.com/),
-    which unfortunately does not support  
-    GNU/Linux distributions at all!
+     the popular [Internet Download Manager (IDM)](https://www.internetdownloadmanager.com/),
+     which unfortunately does not support  
+     GNU/Linux distributions at all!  
 
 ---
 
@@ -85,14 +85,15 @@ between the two tools.
 
 ## 📦 Requirements
 
-- `Bash 4.0+`  
-- [`Streamlink`](https://streamlink.github.io/)  
+- `Bash 4.0+` 
+- [`Streamlink`](https://github.com/streamlink/streamlink)  
 - [`curlconverter`](https://github.com/curlconverter/curlconverter) (through [npm](https://github.com/npm/cli#))  
 - [`curl`](https://github.com/curl/curl)  
 - [`jq` ](https://github.com/jqlang/jq)  
 - [`ffmpeg`](https://github.com/FFmpeg/FFmpeg)  
-- [`wl-clipboard`](https://github.com/bugaevc/wl-clipboard) (if you use [KDE Plasma](https://kde.org/plasma-desktop/) DE)  
-- `xclip` or `xsel` (if you use DE running on X11 session)  
+- [`wl-clipboard`](https://github.com/bugaevc/wl-clipboard) (for Clipboard handling on [Wayland](https://gitlab.freedesktop.org/wayland/wayland))  
+- [`xclip`](https://linux.die.net/man/1/xclip) or
+  [`xsel`](https://linux.die.net/man/1/xsel) (if you use DE running on X11 session)  
 
 ---
 
@@ -102,7 +103,7 @@ between the two tools.
 DEBUG=X bash vdh2streamlink.sh [-h|--help] [-l|--logfile] [-f=|--format=VDH/cURL] \
                     [-c|--clipboard] [-i|--input data.txt] [-o|--output newVideo]
 
-DEBUG=X.............default OFF - disable explicitly by DEBUG=0 - enable by DEBUG=1 or DEBUG=2
+DEBUG=X...........default OFF - disable explicitly by DEBUG=0 - enable by DEBUG=1 or DEBUG=2
 
 -h|--help.........Print this usage message and terminate the program immediately.
 
@@ -159,13 +160,16 @@ touch VDHdump.txt cURL.txt
 
 ## ⚙️ Logging Inner Workings
 
-In case the end-user asks for debug/error messages to be redirected to an automatically
-generated log file, then the steps taken to achieve that are as follows:  
+Debug and error handling are implemented using separate file descriptors
+(`stdout` (`fd1`), `stderr` (`fd2`), `fd3`, see
+[Bash redirections](https://www.gnu.org/software/bash/manual/bash.html#Redirections))
+with multiplexing handled by
+[`tee(1)`](https://www.gnu.org/software/coreutils/manual/html_node/tee-invocation.html).  
 
 ```text
-1. As a general rule, debug messages are always written to file-descriptor-3
-   (fd3) (wherever that goes). Also as a general rule, error messages are
-   always written to stderr fd2 (wherever that goes).
+1. As a general rule, debug messages are always written to fd3 (wherever
+   that goes). Also as a general rule, error messages are always written
+   to stderr fd2 (wherever that goes).
 2. As an initial state (i.e., set early on in the script), fd3 is redirected
    to stderr (fd2), which in turn writes to the terminal as usual.
 3. The fd wiring logic shown in the diagram below (which uses GNU's tee) is
@@ -177,7 +181,7 @@ generated log file, then the steps taken to achieve that are as follows:
 │                  ┌─────────────────────┐                               │
 │ script’s fd3 ───►│tee's stdin          │                               │
 │          ▲       │                     │                               │
-│          │       │           tee writes│──► log file                   │
+│          │       │          tee appends│──► log file                   │
 │ xtrace ──┘       │         tee's stdout│──► 1>/dev/null                │
 │                  └─────────────────────┘                               │
 │                                                                        │
@@ -196,8 +200,9 @@ generated log file, then the steps taken to achieve that are as follows:
 
 ## ⚖️ License
 
-This work is licensed under the MIT license - see the
-[LICENSE](https://github.com/IbrahimTouman/VDH_to_Streamlink/blob/master/LICENSE) file for details  
+This work is licensed under the
+[MIT license](https://github.com/IbrahimTouman/VDH_to_Streamlink/blob/master/LICENSE)
+([OSI reference](https://opensource.org/licenses/MIT)) for details  
 
 ---
 
