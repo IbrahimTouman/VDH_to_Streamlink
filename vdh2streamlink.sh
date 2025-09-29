@@ -357,7 +357,7 @@ convert_VDH_to_cURL()
     printf '%s' "curl '$URL'"
     if (( "${#headers[@]}" >= 2 )); then
         printf '%s\n' " \\"
-        for ((i=0; i<${#headers[@]}-2; i+=2)); do
+        for (( i=0; i<${#headers[@]}-2; i+=2 )); do
             printf '%s %s\n' "  -H" "'${headers[i]}: ${headers[i+1]}' \\"
         done
         printf '%s %s' "  -H" "'${headers[${#headers[@]}-2]}: ${headers[${#headers[@]}-1]}'"
@@ -416,7 +416,7 @@ fi
 
 if (( "${#SL_headersArgs[@]}" >= 2 )); then
     log_debug "The headers which will be passed to Streamlink:"
-    for ((i=0; i<${#SL_headersArgs[@]}; i+=2)); do
+    for (( i=0; i<${#SL_headersArgs[@]}; i+=2 )); do
         log_debug "  [${SL_headersArgs[i]}] [${SL_headersArgs[i+1]}]";
     done
 fi
@@ -480,7 +480,7 @@ derive_extension_from_playlist()
             # if the m3u8 playlist is too long (>2000 characters), log playlist's head (1000 characters)
             # and playlist's tail (1000 characters) and then omit what is in between..
             msg="m3u8 playlist (fetched via 'curl -fsSL'):\n[${m3u8_playlist:0:1000}\n.\n.\n. *** omitting "
-            msg+="$((${#m3u8_playlist} - 2000)) characters for brevity ***\n.\n.\n${m3u8_playlist: -1000}]\n"
+            msg+="$(( ${#m3u8_playlist} - 2000 )) characters for brevity ***\n.\n.\n${m3u8_playlist: -1000}]\n"
             log_debug "$msg"
         fi
     else
@@ -587,7 +587,7 @@ remove_incomplete_suffix()
     local n=2
     while [[ -e $candidate_name ]]; do
         candidate_name="${suffixless%.*}_{$n}.${suffixless##*.}"
-        ((n++))
+        (( n++ ))
     done
 
     if { rename_status="$(mv --verbose --no-clobber -- "$inFile" "$candidate_name")"; }; then
