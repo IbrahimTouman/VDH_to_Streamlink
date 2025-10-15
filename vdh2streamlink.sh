@@ -243,17 +243,17 @@ if [[ -n "$logFile" ]]; then
     #   script's stderr (fd2) ──► terminal                                  #
     #   script's fd3 ───────────► fd2                                       #
     #                                                                       #
-    # Step 2 — after: exec 3> >(tee "$logFile" 1>/dev/null)                 #
+    # Step 2 — after: exec 3> >(tee --append "$logFile" 1>/dev/null)        #
     #   >(...) process substitution runs tee inside it.                     #
     #   fd3 in the script points to tee’s stdin.                            #
     #   inside tee:                                                         #
-    #       - copies stdin into log file, using --append                    #
+    #       - copies stdin into log file, using the --append mechanism      #
     #       - suppresses its normal stdout using 1>/dev/null                #
     #                                                                       #
     # Step 3 — after: BASH_XTRACEFD=3                                       #
     #   -x trace output also flows into fd3.                                #
     #                                                                       #
-    # Step 4 — after: exec 2> >(tee -a "$logFile" 1>&2)                     #
+    # Step 4 — after: exec 2> >(tee --append "$logFile" 1>&2)               #
     #   - exec 2> … spawns another tee, which appends                       #
     #     to the same log file and forwards stderr back to                  #
     #     the terminal (1>&2).                                              #
@@ -533,34 +533,39 @@ attach_file_extension()
         # media extension. Otherwise, we simply append our desired media extension to the end of 'path'.
         local suspicious_extension="${path##*.}"
 
-        if [[ -r /usr/share/mime/globs ]]; then
-            while IFS= read -r pattern; do
-                # lines look like: "video/mp4:*.mp4" → extract "mp4"
-                media_extensions_list+=( "${pattern##*.}" )
-            done < <(grep -i -e "video/" -e "audio/" -- '/usr/share/mime/globs')
+        # no need to do further investigation if the suspicious extension is too long (more than 7 characters)
+        if (( "${#suspicious_extension}" <= 7 )); then
+            if [[ -r /usr/share/mime/globs ]]; then
+                while IFS= read -r pattern; do
+                    # lines look like: "video/mp4:*.mp4" → extract "mp4"
+                    media_extensions_list+=( "${pattern##*.}" )
+                done < <(grep -i -e "video/" -e "audio/" -- '/usr/share/mime/globs')
 
-            log_debug "Extracted all ${#media_extensions_list[@]} media file-extensions from '/usr/share/mime/globs'\n"
-        else
-            # fallback list (common media extensions) — keeps script portable when /usr/share/mime/globs is absent
-            media_extensions_list=( mp4 m4v m4s m3u8 webm mkv mka mov mp3 aac aiff flac oga ogg avi ts m2t m2s m4t tmf tp trp ty )
-            msg="Warning: '/usr/share/mime/globs' not found, so we fall back to using the built-in incomprehensive "
-            msg+="media file-extensions list\n"
-            log_debug "$msg"
-        fi
-
-
-        for ext in "${media_extensions_list[@]}"; do
-            if [[ "${suspicious_extension,,}" == "${ext,,}" ]]; then  # ${ext,,} → lowercase, ${ext^^} → uppercase
-                msg="The user-provided '.$suspicious_extension' is a media file-extension, "
-                msg+="and hence we will replace it with our '.$desired_extension'\n"
+                log_debug "Extracted all ${#media_extensions_list[@]} media file-extensions from '/usr/share/mime/globs'\n"
+            else
+                # fallback list (common media extensions) — this keeps script portable when /usr/share/mime/globs is absent
+                media_extensions_list=( mp4 m4v m4s m3u8 webm mkv mka mov mp2 mp3 mpg mpeg aac aiff flac opus oga ogg avi \
+                                        ts m2t m2s m4t tmf dts mov ac3 wav 3gp wma wmv divx flv m3u8 )
+                msg="Warning: '/usr/share/mime/globs' is not found or unreadable, so we fall back to using the built-in "
+                msg+="incomprehensive media file-extensions list\n"
                 log_debug "$msg"
-                printf '%s.%s' "${path%.*}" "$desired_extension"
-                return
             fi
-        done
+
+
+            for ext in "${media_extensions_list[@]}"; do
+                if [[ "${suspicious_extension,,}" == "${ext,,}" ]]; then  # ${ext,,} → lowercase, ${ext^^} → uppercase
+                    msg="The user-provided '.$suspicious_extension' is a media file-extension, "
+                    msg+="and hence we will replace it with our '.$desired_extension'\n"
+                    log_debug "$msg"
+                    printf '%s.%s' "${path%.*}" "$desired_extension"
+                    return
+                fi
+            done
+        fi
     fi
 
-    # the path doesn't contain any dot, which makes our job easier (simple appending is enough)
+    # the path doesn't contain any dot or the suspicious extension is too long,
+    # which makes our job easier (a simple appending is enough)
     printf '%s.%s' "$path" "$desired_extension"
 }
 
